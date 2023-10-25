@@ -1,0 +1,303 @@
+---
+- name: Установка сборочных зависимостей
+  hosts: all
+  vars:
+    repo_url: "https://salsa.debian.org"
+    download_dir: "/sources_dir"
+    deb_dir: "/deb_packages"
+  # libvirt
+    libvirt_version: "9.6.0-1"
+    libvirt_update: no
+  # libvirt_python
+    libvirt_python_version: "9.6.0-1"
+    libvirt_python_update: no
+  # qemu
+    qemu_version: "1%8.1.0+ds-1"
+    qemu_update: yes
+  # libunwind8
+    libunwind_version: "1.3.2-2"
+    libunwind_update: no
+  #libunbound8
+    libunbound_version: "1.18.0-2"
+    libunbound_update: no
+
+  tasks:
+    - name: Установка зависимостей для сборки 
+      become: yes
+      apt:
+        name: "{{ item }}"
+        state: present
+      with_items:
+        - build-essential
+        - debhelper
+        - devscripts
+        - git
+
+    - name: Create folders with the current date
+      file:
+        path: "{{ item }}"
+        state: directory
+      loop:
+        - "{{ download_dir }}"
+        - "{{ deb_dir }}"
+
+    - name: Клонирование репозитория libvirt
+      git:
+        repo: "{{repo_url}}/libvirt-team/libvirt.git"
+        dest: "{{ download_dir }}/libvirt"
+        version: debian/"{{ libvirt_version }}"
+      when: libvirt_update
+
+    - name: Установка сборочных зависимостей для libvirt
+      shell:
+        cmd: mk-build-deps --install --remove --tool 'apt-get -y'
+        chdir: "{{ download_dir }}/libvirt"
+      become: yes
+      when: libvirt_update
+
+    - name: Build libvirt package
+      shell:
+        cmd: dpkg-buildpackage -us -uc -b
+        chdir: "{{ download_dir }}/libvirt"
+      environment:
+        DEB_BUILD_OPTIONS: nocheck
+      become: yes
+      when: libvirt_update
+
+    - name: Клонирование репозитория libvirt-python
+      git:
+        repo: "{{repo_url}}/libvirt-team/libvirt-python.git"
+        dest: "{{ download_dir }}/libvirt-python"
+        version: debian/"{{ libvirt_python_version }}"
+      when: libvirt_python_update
+
+    - name: Установка сборочных зависимостей для libvirt-python
+      shell:
+        cmd: mk-build-deps --install --remove --tool 'apt-get -y'
+        chdir: "{{ download_dir }}/libvirt-python"
+      become: yes
+      when: libvirt_python_update
+
+    - name: Build libvirt-python package
+      shell:
+        cmd: dpkg-buildpackage -us -uc -b
+        chdir: "{{ download_dir }}/libvirt-python"
+      environment:
+        DEB_BUILD_OPTIONS: nocheck
+      become: yes
+      when: libvirt_python_update
+
+    - name: Клонирование репозитория qemu
+      git:
+        repo: "{{repo_url}}/qemu-team/qemu.git"
+        dest: "{{ download_dir }}/qemu"
+        version: debian/"{{ qemu_version }}"
+      when: qemu_update
+
+    - name: Установка сборочных зависимостей для qemu
+      shell:
+        cmd: mk-build-deps --install --remove --tool 'apt-get -y'
+        chdir: "{{ download_dir }}/qemu"
+      become: yes
+      when: qemu_update
+
+    - name: Build qemu package
+      shell:
+        cmd: dpkg-buildpackage -us -uc -b
+        chdir: "{{ download_dir }}/qemu"
+      environment:
+        DEB_BUILD_OPTIONS: nocheck
+      become: yes
+      when: qemu_update
+
+    - name: Клонирование репозитория libunwind
+      git:
+        repo: "{{repo_url}}/vimerbf-guest/libunwind.git"
+        dest: "{{ download_dir }}/libunwind"
+        version: debian/"{{ libunwind_version }}"
+      when: libunwind_update
+
+    - name: Установка сборочных зависимостей для libunwind
+      shell:
+        cmd: mk-build-deps --install --remove --tool 'apt-get -y'
+        chdir: "{{ download_dir }}/libunwind"
+      become: yes
+      when: libunwind_update
+
+    - name: Build libunwind package
+      shell:
+        cmd: dpkg-buildpackage -us -uc -b
+        chdir: "{{ download_dir }}/libunwind"
+      environment:
+        DEB_BUILD_OPTIONS: nocheck
+      become: yes
+      when: libunwind_update
+
+    - name: Клонирование репозитория libunbound8
+      git:
+        repo: "{{repo_url}}/dns-team/unbound.git"
+        dest: "{{ download_dir }}/unbound"
+        version: debian/"{{ libunbound_version }}"
+      when: libunbound_update
+
+    - name: Установка сборочных зависимостей для libunbound8
+      shell:
+        cmd: mk-build-deps --install --remove --tool 'apt-get -y'
+        chdir: "{{ download_dir }}/unbound"
+      become: yes
+      when: libunbound_update
+
+    - name: Build libunbound8 package
+      shell:
+        cmd: dpkg-buildpackage -us -uc -b
+        chdir: "{{ download_dir }}/unbound"
+      environment:
+        DEB_BUILD_OPTIONS: nocheck
+      become: yes
+      when: libunbound_update
+
+    - name: Найти файлы для копирования
+      find:
+        paths: "{{ download_dir }}"
+        patterns:
+          - "libvirt-daemon-system_*"
+          - "libvirt-dev_*"
+          - "python3-libvirt_*"
+          - "libunwind8_*"
+          - "libunbound8_*"
+      register: files_to_copy
+
+    - name: Копирование файлов
+      shell: cp "{{ item.path }}" "{{ deb_dir }}"
+      loop: "{{ files_to_copy.files }}"
+
+
+    # - name: Ensure download directory exists
+    #   file:
+    #     path: "{{ download_dir }}"
+    #     state: directory
+
+    # - name: Download libvirt sources
+    #   get_url:
+    #     url: "{{ libvirt_url }}/libvirt_{{ libvirt_version }}.orig.tar.xz"
+    #     dest: "{{ download_dir }}/libvirt_{{ libvirt_version }}.orig.tar.xz"
+
+    # - name: Extract libvirt sources
+    #   unarchive:
+    #     src: "{{ download_dir }}/libvirt_{{ libvirt_version }}.orig.tar.xz"
+    #     dest: "{{ download_dir }}"
+    #     remote_src: yes
+
+    # - name: Download debian patches
+    #   get_url:
+    #     url: "{{libvirt_url}}/libvirt_{{ libvirt_version }}-1.debian.tar.xz"
+    #     dest: "{{ download_dir }}/libvirt_{{ libvirt_version }}-1.debian.tar.xz"
+
+    # - name: Extract debian patches
+    #   unarchive:
+    #     src: "{{ download_dir }}/libvirt_{{ libvirt_version }}-1.debian.tar.xz"
+    #     dest: "{{ download_dir }}/libvirt-{{ libvirt_version }}"
+    #     remote_src: yes
+
+    # - name: Установка сборочных зависимостей
+    #   shell:
+    #     cmd: mk-build-deps --install --remove --tool 'apt-get -y'
+    #     chdir: "{{ download_dir }}/libvirt-{{ libvirt_version }}"
+    #   become: yes
+
+    # - name: Build libvirt package
+    #   shell:
+    #     cmd: dpkg-buildpackage -us -uc -b
+    #     chdir: "{{ download_dir }}/libvirt-{{ libvirt_version }}"
+    #   environment:
+    #     DEB_BUILD_OPTIONS: nocheck
+    #   become: yes
+
+    # - name: Download qemu sources
+    #   get_url:
+    #     url: "{{ qemu_url }}/qemu_{{ qemu_version }}+ds.orig.tar.xz"
+    #     dest: "{{ download_dir }}/qemu_{{ qemu_version }}+ds.orig.tar.xz"
+
+    # - name: Extract qemu sources
+    #   unarchive:
+    #     src: "{{ download_dir }}/qemu_{{ qemu_version }}+ds.orig.tar.xz"
+    #     dest: "{{ download_dir }}"
+    #     remote_src: yes
+
+    # - name: Download debian patches
+    #   get_url:
+    #     url: "{{qemu_url}}/qemu_{{ qemu_version }}+ds-1.debian.tar.xz"
+    #     dest: "{{ download_dir }}/qemu_{{ qemu_version }}+ds-1.debian.tar.xz"
+
+    # - name: Extract debian patches
+    #   unarchive:
+    #     src: "{{ download_dir }}/qemu_{{ qemu_version }}+ds-1.debian.tar.xz"
+    #     dest: "{{ download_dir }}/qemu-{{ qemu_version }}"
+    #     remote_src: yes
+
+    # - name: Установка сборочных зависимостей
+    #   shell:
+    #     cmd: mk-build-deps --install --remove --tool 'apt-get -y'
+    #     chdir: "{{ download_dir }}/qemu-{{ qemu_version }}"
+    #   become: yes
+
+    # - name: Build libvirt package
+    #   shell:
+    #     cmd: dpkg-buildpackage -us -uc -b
+    #     chdir: "{{ download_dir }}/qemu-{{ qemu_version }}"
+    #   environment:
+    #     DEB_BUILD_OPTIONS: nocheck
+    #   become: yes
+
+# -  hosts: all
+#    #cloud-stage-1n2.el.wb.rugather_facts: false
+#    become: true
+#    vars:
+#      libvirt_version: "debian/9.6.0-1"
+#      libvirt_url: "https://snapshot.debian.org/archive/debian/20230809T032342Z/pool/main/libv/libvirt"
+
+#    tasks:
+#      - name: Установка необходимых пакетов для сборки
+#        apt:
+#          name: "{{ item }}"
+#          state: present
+#        with_items:
+#          - build-essential
+#          - devscripts
+#          - debhelper
+#     #     # - dh-systemd
+#     #     - git
+
+#     # - name: Клонирование репозитория Debian
+#     #   git:
+#     #     repo: https://salsa.debian.org/libvirt-team/libvirt.git
+#     #     dest: /tmp/libvirt
+#     #     version: "{{ libvirt_version }}"
+
+#      - name: Установка сборочных зависимостей
+#        command: mk-build-deps --install --remove
+#        args:
+#         chdir: /tmp/libvirt
+
+#      - name: Установка сборочных зависимостей
+#        command: wget  {{libvirt_url}}/libvirt_9.6.0.orig.tar.xz &&
+#                 tar -xJf libvirt_9.6.0.orig.tar.xz &&
+#                 wget -qO- {{libvirt_url}}/libvirt_9.6.0-1.debian.tar.xz | tar -xJ --directory=libvirt-9.6.0/
+#        args:
+#         chdir: /tmp/libvirt
+
+#      #- name: Сборка пакета libvirt
+#      # command: debuild -us -uc -b -nc -i -I"*.deb" -I"/tmp/libvirt/libvirt-dev*"
+#      #  args:
+#      #   chdir: /tmp/libvirt
+
+#      #- name: Сборка пакета libvirt
+#      #  command: debuild -us -uc -b -nc -i -I"*.deb" -I"/tmp/libvirt/libvirt-daemon-system*"
+#      #  args:
+#      #   chdir: /tmp/libvirt
+
+#      - name: Копирование пакета на S3
+#        command: aws s3 cp /tmp/libvirt/*.deb s3://my-bucket/
+    
+
+      
